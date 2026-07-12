@@ -106,8 +106,20 @@ function textToPosterItems(value: string) {
 }
 
 export function AdminPage() {
-  const { content, setContent, resetContent } = useDemoContent();
+  const {
+    content,
+    setContent,
+    resetContent,
+    reloadFromRemote,
+    saveToRemote,
+    isLoading,
+    isSaving,
+    saveMessage,
+    remoteLoaded,
+    backendConfigured,
+  } = useDemoContent();
   const [active, setActive] = useState<SectionKey>('home');
+  const [adminKey, setAdminKey] = useState('');
 
   const activeInfo = useMemo(() => sectionInfo.find((item) => item.key === active)!, [active]);
 
@@ -121,6 +133,14 @@ export function AdminPage() {
     }));
   };
 
+  const connectionLabel = backendConfigured
+    ? remoteLoaded
+      ? 'Supabase 연결됨'
+      : 'Supabase 테이블 확인 필요'
+    : 'Supabase 설정 필요';
+
+  const connectionTone = backendConfigured && remoteLoaded ? styles.statusOk : styles.statusWarn;
+
   return (
     <main className={styles.page}>
       <div className={styles.container}>
@@ -128,7 +148,33 @@ export function AdminPage() {
           <div className={styles.eyebrow}>Admin Studio</div>
           <div className={styles.title}>관리자 편집 페이지</div>
           <div className={styles.subtitle}>
-            참여자 화면의 실제 노출 문구와 카드 구성을 같은 데이터로 묶어 두었습니다. 여기서 수정하면 현재 브라우저 기준으로 홈, 일정, 커넥트, 플레이, MY 화면에 바로 반영됩니다.
+            참여자 화면과 같은 데이터를 바로 수정하고, 저장 버튼으로 Supabase에 실제 반영합니다. 저장이 끝나면 새 브라우저·새 기기에서도 같은 내용이 열립니다.
+          </div>
+        </section>
+
+        <section className={`${styles.previewCard} ${styles.saveBar}`}>
+          <div className={styles.statusRow}>
+            <span className={`${styles.statusBadge} ${connectionTone}`}>{connectionLabel}</span>
+            <span className={styles.saveMeta}>{isLoading ? '불러오는 중...' : saveMessage || '상태 대기 중'}</span>
+          </div>
+          <div className={styles.actionRow}>
+            <div className={styles.fieldInline}>
+              <label htmlFor="admin-save-key">관리자 저장 키</label>
+              <input
+                id="admin-save-key"
+                type="password"
+                className={`${styles.input} ${styles.secureInput}`}
+                value={adminKey}
+                onChange={(e) => setAdminKey(e.target.value)}
+                placeholder="Render / .env에 넣은 DEMO_ADMIN_KEY"
+              />
+            </div>
+            <button type="button" className={styles.primary} onClick={() => saveToRemote(adminKey)} disabled={isSaving || isLoading}>
+              {isSaving ? '저장 중...' : 'Supabase 저장'}
+            </button>
+            <button type="button" className={styles.secondary} onClick={reloadFromRemote} disabled={isSaving || isLoading}>
+              원격 다시 불러오기
+            </button>
           </div>
         </section>
 
@@ -274,10 +320,10 @@ export function AdminPage() {
             <div className={styles.previewCard}>
               <strong>연동 체크 포인트</strong>
               <div className={styles.previewList}>
-                <div>• 관리자 입력값은 현재 브라우저 기준으로 즉시 저장됩니다.</div>
                 <div>• 참여자 페이지와 관리자 페이지가 같은 content store를 사용합니다.</div>
-                <div>• 즉, 홈/일정/커넥트/플레이/MY에서 보이는 주요 문구와 리스트가 바로 반영됩니다.</div>
-                <div>• 실제 운영용으로 가려면 다음 단계에서 이 store를 API/DB에 연결하면 됩니다.</div>
+                <div>• 관리자 페이지에서 먼저 수정한 뒤, 상단의 Supabase 저장 버튼을 눌러야 실제 운영 데이터가 바뀝니다.</div>
+                <div>• 저장 후 새 브라우저에서 /home, /schedule, /connect, /play, /my를 열어도 같은 내용이 보입니다.</div>
+                <div>• Supabase가 아직 준비되지 않았으면 기본값으로 동작하고, 준비 후 바로 실저장 모드로 전환됩니다.</div>
               </div>
             </div>
           </section>

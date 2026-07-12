@@ -225,6 +225,69 @@
   padding: 14px;
 }
 
+.saveBar {
+  margin-top: 16px;
+  display: grid;
+  gap: 12px;
+}
+
+.statusRow {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 10px;
+}
+
+.statusBadge {
+  display: inline-flex;
+  align-items: center;
+  min-height: 32px;
+  padding: 0 12px;
+  border-radius: 999px;
+  font-size: 12px;
+  font-weight: 800;
+  border: 1px solid transparent;
+}
+
+.statusOk {
+  color: #0c5b3b;
+  background: rgba(116, 224, 170, 0.22);
+  border-color: rgba(12, 91, 59, 0.14);
+}
+
+.statusWarn {
+  color: #7a4f00;
+  background: rgba(255, 214, 92, 0.28);
+  border-color: rgba(122, 79, 0, 0.14);
+}
+
+.saveMeta {
+  font-size: 13px;
+  color: #41566e;
+}
+
+.actionRow {
+  display: grid;
+  grid-template-columns: minmax(260px, 1fr) auto auto;
+  gap: 10px;
+  align-items: end;
+}
+
+.fieldInline {
+  display: grid;
+  gap: 6px;
+}
+
+.fieldInline label {
+  font-size: 12px;
+  font-weight: 700;
+  color: #59708a;
+}
+
+.secureInput {
+  min-height: 44px;
+}
+
 .previewCard strong {
   display: block;
   font-size: 14px;
@@ -248,6 +311,10 @@
   }
 
   .formGrid {
+    grid-template-columns: 1fr;
+  }
+
+  .actionRow {
     grid-template-columns: 1fr;
   }
 }
