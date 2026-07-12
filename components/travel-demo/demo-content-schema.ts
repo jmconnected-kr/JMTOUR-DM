@@ -93,6 +93,43 @@ export type DemoContent = {
   };
 };
 
+export type DemoEvent = {
+  id: string;
+  title: string;
+  location: string;
+  dateRange: string;
+  theme: string;
+  status: string;
+  summary: string;
+  managerName: string;
+  participantCount: string;
+};
+
+export type ParticipantAccount = {
+  id: string;
+  name: string;
+  email: string;
+  userId: string;
+  inviteCode: string;
+  role: 'participant';
+  eventId: string;
+  status: string;
+  headline: string;
+  language: string;
+  note: string;
+  canEditSharedPages: boolean;
+  canEditSchedules: boolean;
+  quickActions: string[];
+  customSchedule: TimelineItem[];
+};
+
+export type DemoWorkspace = {
+  activeEventId: string;
+  events: DemoEvent[];
+  accounts: ParticipantAccount[];
+  pagesByEvent: Record<string, DemoContent>;
+};
+
 export const defaultDemoContent: DemoContent = {
   home: {
     greetingName: 'Anna',
@@ -206,3 +243,155 @@ export const defaultDemoContent: DemoContent = {
     settingItems: ['언어', '알림', '프라이버시', '위치 공유'],
   },
 };
+
+function cloneContent(content: DemoContent): DemoContent {
+  return JSON.parse(JSON.stringify(content)) as DemoContent;
+}
+
+const busanEvent: DemoEvent = {
+  id: 'busan-summer-2026',
+  title: '부산 썸머 커넥트 2026',
+  location: '부산 해운대 · 영도 · 기장',
+  dateRange: '2026.07.12–07.15',
+  theme: '바다, 로컬 커넥트, 컬러 플레이',
+  status: '운영중',
+  summary: '여행자와 현지인이 함께 움직이는 호크니 스타일 체험형 행사',
+  managerName: 'Admin Team',
+  participantCount: '48명',
+};
+
+const seoulContent = cloneContent(defaultDemoContent);
+seoulContent.home.greetingName = 'Jun';
+seoulContent.home.subcopy = '서울 여행 · Day 1 · 24°C · 맑음 · 추천 4개';
+seoulContent.home.heroTitle = '09:30 성수 아트 워크 출발';
+seoulContent.home.recommendationTitle = '성수 루프탑 디제잉 세션';
+seoulContent.schedule.subcopy = 'Day 1 · 8월 20일 목요일 · 서울 · 실내 전시 대체 동선 제공';
+seoulContent.schedule.places = [
+  { title: '성수 아트홀', subtitle: '오전 워크숍' },
+  { title: '브런치 스튜디오', subtitle: '점심 네트워킹' },
+  { title: '서울숲 산책', subtitle: '오후 자유 플레이' },
+];
+seoulContent.connect.heroTitle = '서울 로컬 큐레이터와 연결';
+seoulContent.play.heroTitle = '오늘의 컬러 조각 모으기';
+seoulContent.my.heroTitle = 'Jun’s Seoul Journey';
+
+const seoulEvent: DemoEvent = {
+  id: 'seoul-creative-weekend',
+  title: '서울 크리에이티브 위켄드',
+  location: '성수 · 서울숲 · 한남',
+  dateRange: '2026.08.20–08.22',
+  theme: '아트 워크, 브런치, 도시 산책',
+  status: '모집중',
+  summary: '도시 감도와 네트워킹을 중심으로 한 주말형 행사',
+  managerName: 'City Host',
+  participantCount: '32명',
+};
+
+export const defaultDemoWorkspace: DemoWorkspace = {
+  activeEventId: busanEvent.id,
+  events: [busanEvent, seoulEvent],
+  accounts: [
+    {
+      id: 'anna-participant',
+      name: 'Anna',
+      email: 'anna@example.com',
+      userId: '',
+      inviteCode: 'ANNA2026',
+      role: 'participant',
+      eventId: busanEvent.id,
+      status: '등록 완료',
+      headline: '사진과 로컬 카페를 좋아하는 참가자',
+      language: '한국어 · 영어',
+      note: '오후 일정은 도보 중심으로 선호합니다.',
+      canEditSharedPages: true,
+      canEditSchedules: true,
+      quickActions: ['도움 요청', '친구 찾기', 'QR 체크인'],
+      customSchedule: [
+        { time: '16:00', title: '개인 포토 스팟 메모', description: '광안리 노을 컷 저장' },
+        { time: '19:30', title: '야간 산책 참여', description: '커넥트 소모임 자동 등록' },
+      ],
+    },
+    {
+      id: 'jun-participant',
+      name: 'Jun',
+      email: 'jun@example.com',
+      userId: '',
+      inviteCode: 'JUN2026',
+      role: 'participant',
+      eventId: seoulEvent.id,
+      status: '대기 등록',
+      headline: '브런치와 전시를 좋아하는 참가자',
+      language: '한국어',
+      note: '비 오면 실내 전시 동선 우선',
+      canEditSharedPages: false,
+      canEditSchedules: true,
+      quickActions: ['일정 추가', '메모 저장'],
+      customSchedule: [
+        { time: '18:20', title: '브런치 리뷰 작성', description: '플레이 페이지 후기 업로드 예정' },
+      ],
+    },
+  ],
+  pagesByEvent: {
+    [busanEvent.id]: defaultDemoContent,
+    [seoulEvent.id]: seoulContent,
+  },
+};
+
+export function getDefaultContentForEvent(eventId: string) {
+  return cloneContent(defaultDemoWorkspace.pagesByEvent[eventId] ?? defaultDemoContent);
+}
+
+export function isLegacyDemoContent(value: unknown): value is DemoContent {
+  if (!value || typeof value !== 'object') return false;
+  const record = value as Record<string, unknown>;
+  return ['home', 'schedule', 'connect', 'play', 'my'].every((key) => key in record);
+}
+
+export function isDemoWorkspace(value: unknown): value is DemoWorkspace {
+  if (!value || typeof value !== 'object') return false;
+  const record = value as Record<string, unknown>;
+  return 'activeEventId' in record && 'events' in record && 'accounts' in record && 'pagesByEvent' in record;
+}
+
+export function normalizeDemoWorkspace(input: DemoWorkspace): DemoWorkspace {
+  const events = input.events?.length ? input.events : defaultDemoWorkspace.events;
+  const activeEventId = events.some((event) => event.id === input.activeEventId)
+    ? input.activeEventId
+    : events[0].id;
+
+  const pagesByEvent: Record<string, DemoContent> = {};
+  for (const event of events) {
+    const existing = input.pagesByEvent?.[event.id];
+    pagesByEvent[event.id] = isLegacyDemoContent(existing) ? cloneContent(existing) : getDefaultContentForEvent(event.id);
+  }
+
+  const accounts = (input.accounts ?? []).map((account) => ({
+    ...account,
+    role: 'participant' as const,
+    eventId: events.some((event) => event.id === account.eventId) ? account.eventId : activeEventId,
+    email: typeof account.email === 'string' ? account.email : '',
+    userId: typeof account.userId === 'string' ? account.userId : '',
+    inviteCode: typeof account.inviteCode === 'string' ? account.inviteCode : '',
+    quickActions: Array.isArray(account.quickActions) ? account.quickActions : [],
+    customSchedule: Array.isArray(account.customSchedule) ? account.customSchedule : [],
+    canEditSharedPages: Boolean(account.canEditSharedPages),
+    canEditSchedules: Boolean(account.canEditSchedules),
+  }));
+
+  return {
+    activeEventId,
+    events,
+    accounts,
+    pagesByEvent,
+  };
+}
+
+export function createWorkspaceFromLegacy(value?: DemoContent): DemoWorkspace {
+  return normalizeDemoWorkspace({
+    ...defaultDemoWorkspace,
+    pagesByEvent: {
+      ...defaultDemoWorkspace.pagesByEvent,
+      [defaultDemoWorkspace.activeEventId]: cloneContent(value ?? defaultDemoContent),
+    },
+  });
+}

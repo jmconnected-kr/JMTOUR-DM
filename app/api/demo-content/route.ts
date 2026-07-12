@@ -1,5 +1,13 @@
 import { NextResponse } from 'next/server';
-import { defaultDemoContent, type DemoContent } from '../../../components/travel-demo/demo-content-schema';
+import {
+  createWorkspaceFromLegacy,
+  defaultDemoWorkspace,
+  isDemoWorkspace,
+  isLegacyDemoContent,
+  normalizeDemoWorkspace,
+  type DemoWorkspace,
+} from '../../../components/travel-demo/demo-content-schema';
+import { getCurrentAuthContext } from '../../../lib/auth';
 import { getSupabaseAdmin, getSupabaseConfigError } from '../../../lib/supabase-admin';
 
 export const dynamic = 'force-dynamic';
@@ -9,26 +17,25 @@ const CONTENT_SLUG = process.env.DEMO_CONTENT_SLUG ?? 'travel-demo';
 
 type DemoContentRow = {
   slug: string;
-  content: DemoContent;
+  content: DemoWorkspace | unknown;
   updated_at?: string;
   updated_by?: string | null;
 };
 
-function isDemoContent(value: unknown): value is DemoContent {
-  if (!value || typeof value !== 'object') return false;
-  const record = value as Record<string, unknown>;
-  return ['home', 'schedule', 'connect', 'play', 'my'].every((key) => key in record);
+function getWorkspaceFromUnknown(input: unknown) {
+  if (isDemoWorkspace(input)) return normalizeDemoWorkspace(input);
+  if (isLegacyDemoContent(input)) return createWorkspaceFromLegacy(input);
+  return defaultDemoWorkspace;
 }
 
-async function loadOrSeedContent() {
+async function fetchStoredWorkspace() {
   const supabase = getSupabaseAdmin();
   if (!supabase) {
     return {
-      ok: true as const,
-      content: defaultDemoContent,
-      source: 'default' as const,
       configured: false,
+      workspace: defaultDemoWorkspace,
       message: getSupabaseConfigError() || 'Supabase 환경변수가 아직 설정되지 않았습니다.',
+      source: 'default' as const,
     };
   }
 
@@ -40,81 +47,136 @@ async function loadOrSeedContent() {
 
   if (error) {
     return {
-      ok: true as const,
-      content: defaultDemoContent,
-      source: 'default' as const,
       configured: true,
+      workspace: defaultDemoWorkspace,
       message: 'Supabase는 연결됐지만 demo_contents 테이블 조회에 실패했습니다. SQL 파일을 먼저 실행해 주세요.',
+      source: 'default' as const,
     };
   }
 
-  if (data?.content && isDemoContent(data.content)) {
+  if (!data?.content) {
     return {
-      ok: true as const,
-      content: data.content,
-      source: 'supabase' as const,
       configured: true,
-      message: 'Supabase 저장본을 불러왔습니다.',
+      workspace: defaultDemoWorkspace,
+      message: 'Supabase에 기본 워크스페이스를 생성할 준비가 되었습니다.',
+      source: 'default' as const,
     };
   }
 
-  const { error: seedError } = await supabase.from('demo_contents').upsert(
+  return {
+    configured: true,
+    workspace: getWorkspaceFromUnknown(data.content),
+    message: 'Supabase 저장본을 불러왔습니다.',
+    source: 'supabase' as const,
+  };
+}
+
+async function upsertWorkspace(workspace: DemoWorkspace, updatedBy: string) {
+  const supabase = getSupabaseAdmin();
+  if (!supabase) {
+    return { ok: false as const, message: getSupabaseConfigError() || 'Supabase 환경변수가 비어 있습니다.' };
+  }
+
+  const normalized = normalizeDemoWorkspace(workspace);
+  const { error } = await supabase.from('demo_contents').upsert(
     {
       slug: CONTENT_SLUG,
-      content: defaultDemoContent,
-      updated_by: 'system-seed',
+      content: normalized,
+      updated_by: updatedBy,
       updated_at: new Date().toISOString(),
     },
     { onConflict: 'slug' },
   );
 
-  if (seedError) {
-    return {
-      ok: true as const,
-      content: defaultDemoContent,
-      source: 'default' as const,
-      configured: true,
-      message: '기본 데이터 시드에 실패했습니다. SQL 파일을 확인해 주세요.',
-    };
+  if (error) {
+    return { ok: false as const, message: 'Supabase 저장에 실패했습니다. 테이블 구조를 확인해 주세요.' };
   }
 
-  return {
-    ok: true as const,
-    content: defaultDemoContent,
-    source: 'supabase' as const,
-    configured: true,
-    message: 'Supabase에 기본 콘텐츠를 생성했습니다.',
+  return { ok: true as const, workspace: normalized };
+}
+
+function mergeParticipantWorkspace(current: DemoWorkspace, incoming: DemoWorkspace, user: { id: string; email?: string | null }) {
+  const normalizedCurrent = normalizeDemoWorkspace(current);
+  const normalizedIncoming = normalizeDemoWorkspace(incoming);
+  const email = user.email?.toLowerCase() ?? '';
+
+  const participant = normalizedCurrent.accounts.find(
+    (account) => account.userId === user.id || (email && account.email.toLowerCase() === email),
+  );
+
+  if (!participant) {
+    return { ok: false as const, message: '참여자 계정이 행사 워크스페이스에 연결되지 않았습니다. 다시 로그인해 주세요.' };
+  }
+
+  const incomingAccount = normalizedIncoming.accounts.find((account) => account.id === participant.id) ?? participant;
+  const nextEventId = normalizedCurrent.events.some((event) => event.id === incomingAccount.eventId)
+    ? incomingAccount.eventId
+    : participant.eventId;
+
+  const nextAccounts = normalizedCurrent.accounts.map((account) => {
+    if (account.id !== participant.id) return account;
+    return {
+      ...account,
+      name: incomingAccount.name,
+      email: user.email ?? account.email,
+      userId: user.id,
+      inviteCode: account.inviteCode,
+      eventId: nextEventId,
+      status: incomingAccount.status,
+      headline: incomingAccount.headline,
+      language: incomingAccount.language,
+      note: incomingAccount.note,
+      quickActions: incomingAccount.quickActions,
+      customSchedule: incomingAccount.customSchedule,
+      canEditSharedPages: account.canEditSharedPages,
+      canEditSchedules: account.canEditSchedules,
+    };
+  });
+
+  const nextWorkspace: DemoWorkspace = {
+    ...normalizedCurrent,
+    activeEventId: nextEventId,
+    accounts: nextAccounts,
+    pagesByEvent: { ...normalizedCurrent.pagesByEvent },
   };
+
+  if (participant.canEditSharedPages || participant.canEditSchedules) {
+    const incomingPage = normalizedIncoming.pagesByEvent[nextEventId];
+    if (incomingPage) {
+      nextWorkspace.pagesByEvent[nextEventId] = incomingPage;
+    }
+  }
+
+  return { ok: true as const, workspace: normalizeDemoWorkspace(nextWorkspace), updatedBy: `participant:${participant.name}` };
 }
 
 export async function GET() {
-  const result = await loadOrSeedContent();
-  return NextResponse.json(result);
+  const loaded = await fetchStoredWorkspace();
+
+  if (loaded.configured && loaded.source === 'default') {
+    const seeded = await upsertWorkspace(loaded.workspace, 'system-seed');
+    if (seeded.ok) {
+      return NextResponse.json({
+        workspace: seeded.workspace,
+        configured: true,
+        source: 'supabase',
+        message: 'Supabase에 기본 워크스페이스를 생성했습니다.',
+      });
+    }
+  }
+
+  return NextResponse.json({
+    workspace: loaded.workspace,
+    configured: loaded.configured,
+    source: loaded.source,
+    message: loaded.message,
+  });
 }
 
 export async function PUT(request: Request) {
-  const expectedAdminKey = process.env.DEMO_ADMIN_KEY;
-  if (!expectedAdminKey) {
-    return NextResponse.json(
-      { message: 'DEMO_ADMIN_KEY 환경변수가 비어 있습니다.' },
-      { status: 500 },
-    );
-  }
-
-  const incomingAdminKey = request.headers.get('x-admin-key')?.trim();
-  if (!incomingAdminKey || incomingAdminKey !== expectedAdminKey) {
-    return NextResponse.json(
-      { message: '관리자 저장 키가 올바르지 않습니다.' },
-      { status: 401 },
-    );
-  }
-
-  const supabase = getSupabaseAdmin();
-  if (!supabase) {
-    return NextResponse.json(
-      { message: getSupabaseConfigError() || 'Supabase 환경변수가 비어 있습니다.' },
-      { status: 500 },
-    );
+  const context = await getCurrentAuthContext();
+  if (!context) {
+    return NextResponse.json({ message: '로그인이 필요합니다.' }, { status: 401 });
   }
 
   let body: unknown;
@@ -124,30 +186,33 @@ export async function PUT(request: Request) {
     return NextResponse.json({ message: '잘못된 요청 형식입니다.' }, { status: 400 });
   }
 
-  const content = (body as { content?: unknown })?.content;
-  if (!isDemoContent(content)) {
+  const workspace = (body as { workspace?: unknown })?.workspace;
+  if (!isDemoWorkspace(workspace)) {
     return NextResponse.json(
-      { message: '저장할 콘텐츠 형식이 올바르지 않습니다.' },
+      { message: '저장할 워크스페이스 형식이 올바르지 않습니다.' },
       { status: 400 },
     );
   }
 
-  const { error } = await supabase.from('demo_contents').upsert(
-    {
-      slug: CONTENT_SLUG,
-      content,
-      updated_by: 'admin-panel',
-      updated_at: new Date().toISOString(),
-    },
-    { onConflict: 'slug' },
-  );
+  if (context.role === 'admin') {
+    const saved = await upsertWorkspace(normalizeDemoWorkspace(workspace), `admin:${context.user.email ?? context.user.id}`);
+    if (!saved.ok) {
+      return NextResponse.json({ message: saved.message }, { status: 500 });
+    }
 
-  if (error) {
-    return NextResponse.json(
-      { message: 'Supabase 저장에 실패했습니다. 테이블 구조를 확인해 주세요.' },
-      { status: 500 },
-    );
+    return NextResponse.json({ message: '관리자 변경사항이 Supabase에 저장되었습니다.', workspace: saved.workspace });
   }
 
-  return NextResponse.json({ message: 'Supabase에 실제 저장되었습니다.' });
+  const current = await fetchStoredWorkspace();
+  const merged = mergeParticipantWorkspace(current.workspace, normalizeDemoWorkspace(workspace), context.user);
+  if (!merged.ok) {
+    return NextResponse.json({ message: merged.message }, { status: 401 });
+  }
+
+  const saved = await upsertWorkspace(merged.workspace, merged.updatedBy);
+  if (!saved.ok) {
+    return NextResponse.json({ message: saved.message }, { status: 500 });
+  }
+
+  return NextResponse.json({ message: '참여자 변경사항이 Supabase에 저장되었습니다.', workspace: saved.workspace });
 }

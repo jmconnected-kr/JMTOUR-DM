@@ -1,5 +1,7 @@
 import { PlayPage } from '../../components/travel-demo/play-page';
+import { requireAppUser } from '../../lib/auth';
 
-export default function Page() {
+export default async function Page() {
+  await requireAppUser();
   return <PlayPage />;
 }
