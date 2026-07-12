@@ -1,18 +1,23 @@
+'use client';
+
 import styles from './travel-demo.module.css';
 import { MobileNav } from './mobile-nav';
 import { HomeRecoArt, MyHeroArt, QRArt, ScheduleHeroArt } from './illustrations';
-import { myPosterItems, mySettingItems } from './data';
+import { useDemoContent } from './content-store';
 
 const posterArts = [ScheduleHeroArt, HomeRecoArt] as const;
 
 export function MyPage() {
+  const { content } = useDemoContent();
+  const my = content.my;
+
   return (
     <main className={styles.page}>
       <div className={styles.container}>
         <header className={styles.topbar}>
           <div>
-            <div className={styles.greeting}>MY</div>
-            <div className={styles.subcopy}>QR, 기록, 보관함, 기념품까지 내 자산을 모으는 공간</div>
+            <div className={styles.greeting}>{my.title}</div>
+            <div className={styles.subcopy}>{my.subcopy}</div>
           </div>
           <button type="button" className={styles.iconButton} aria-label="설정 열기">
             ⚙️
@@ -22,12 +27,13 @@ export function MyPage() {
         <section className={`${styles.hero} ${styles.heroMy}`}>
           <div className={styles.heroGrid}>
             <div>
-              <div className={styles.heroEyebrow}>오늘의 기록</div>
-              <div className={styles.heroTitle}>Anna’s Busan Journey</div>
-              <p className={styles.heroBody}>2026.07.12–07.15 · Haeundae · Yeongdo · Gijang · 사진 184장 · 방문 23곳</p>
+              <div className={styles.heroEyebrow}>{my.heroEyebrow}</div>
+              <div className={styles.heroTitle}>{my.heroTitle}</div>
+              <p className={styles.heroBody}>{my.heroBody}</p>
               <div className={styles.heroActions}>
-                <span className={styles.heroPill}>기록 보기</span>
-                <span className={styles.heroPill}>공유하기</span>
+                {my.heroActions.map((action) => (
+                  <span key={action} className={styles.heroPill}>{action}</span>
+                ))}
               </div>
             </div>
             <div className={styles.heroArt}>
@@ -43,16 +49,16 @@ export function MyPage() {
                 <div className={styles.sectionTitle}>방문 도시</div>
                 <div className={styles.sectionMeta}>누적</div>
               </div>
-              <div style={{ fontSize: 24, fontWeight: 800 }}>3곳</div>
-              <div className={styles.captionText}>해운대 · 영도 · 기장</div>
+              <div style={{ fontSize: 24, fontWeight: 800 }}>{my.cityCount}</div>
+              <div className={styles.captionText}>{my.cityNames}</div>
             </div>
             <div className={styles.card}>
               <div className={styles.sectionTitleRow}>
                 <div className={styles.sectionTitle}>새 배지</div>
                 <div className={styles.sectionMeta}>이번 여행</div>
               </div>
-              <div style={{ fontSize: 24, fontWeight: 800 }}>2개</div>
-              <div className={styles.captionText}>컬러 픽 · 오션 러너</div>
+              <div style={{ fontSize: 24, fontWeight: 800 }}>{my.badgeCount}</div>
+              <div className={styles.captionText}>{my.badgeNames}</div>
             </div>
           </section>
 
@@ -66,8 +72,8 @@ export function MyPage() {
                 <QRArt />
               </div>
               <div>
-                <div style={{ fontSize: 14, fontWeight: 800 }}>QR 열기</div>
-                <div className={styles.captionText}>버스 탑승, 현장 체크인, 지역 인증, 빠른 신원 확인에 사용합니다.</div>
+                <div style={{ fontSize: 14, fontWeight: 800 }}>{my.qrTitle}</div>
+                <div className={styles.captionText}>{my.qrDescription}</div>
               </div>
             </div>
           </section>
@@ -78,10 +84,10 @@ export function MyPage() {
               <div className={styles.sectionMeta}>자동 생성</div>
             </div>
             <div className={styles.posterGrid}>
-              {myPosterItems.map((item, index) => {
-                const Art = posterArts[index];
+              {my.posters.map((item, index) => {
+                const Art = posterArts[index % posterArts.length];
                 return (
-                  <div key={item.title}>
+                  <div key={item.title + index}>
                     <div className={styles.poster}>
                       <Art />
                     </div>
@@ -106,10 +112,8 @@ export function MyPage() {
               <div className={styles.sectionMeta}>기본</div>
             </div>
             <div className={styles.pillRow}>
-              {mySettingItems.map((item) => (
-                <span key={item} className={styles.softPill}>
-                  {item}
-                </span>
+              {my.settingItems.map((item) => (
+                <span key={item} className={styles.softPill}>{item}</span>
               ))}
             </div>
           </section>
